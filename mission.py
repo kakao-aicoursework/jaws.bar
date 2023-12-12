@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 import re
 from typing import List
 import tiktoken
-from langchain import LLMChain
+from langchain.chains import LLMChain
 from langchain.chat_models import ChatOpenAI
 from langchain.prompts.chat import (
     ChatPromptTemplate,
@@ -22,10 +22,10 @@ llm = ChatOpenAI(temperature=0.8)
 enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
 
 def build_summarizer(llm):
-    system_message = "assistant는 user의 질문을 함께 받는 데이터를 토대로 잘 대답해라."
+    system_message = "assistant는 카카오톡이라는 메신저의 싱크 API에 대해서 설명해주는 챗봇이다. assistant는 user의 질문을 함께 받는 데이터를 토대로 잘 대답해라."
     system_message_prompt = SystemMessage(content=system_message)
     
-    human_template = "{text}\n---\n위 데이터를 토대로 다음 질문에 대답해 줘.\n---\n{question}"
+    human_template = "{text}\n---\n위 데이터를 토대로 다음 질문에 대답해 줘. 답변은 짧을수록 좋아.\n---\n{question}"
     human_message_prompt = HumanMessagePromptTemplate.from_template(
         human_template)
 
@@ -68,7 +68,7 @@ def get_data():
 
 data = get_data()
 
-def task(data, question):
+def task(question):
 
     full_content_truncated = truncate_text(data, max_tokens=3500)
 
@@ -86,16 +86,6 @@ def send_message(message_log, gpt_model="gpt-3.5-turbo", temperature=0.1):
 
 
 def main():
-    
-    message_log = [
-        {
-            "role": "system",
-            "content": '''
-            너는 카카오톡이라는 메신저의 싱크 API에 대해서 설명해주는 챗봇이다.
-            '''
-        }
-    ]
-
     def show_popup_message(window, message):
         popup = tk.Toplevel(window)
         popup.title("")
@@ -140,10 +130,8 @@ def main():
         window.update_idletasks()
         # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
 
-        response = task(data, user_input)
+        response = task(user_input)
         thinking_popup.destroy()
-
-        message_log.append({"role": "assistant", "content": response})
 
         # 태그를 추가한 부분(1)
         conversation.insert(tk.END, f"gpt assistant: {response}\n", "assistant")
