@@ -1,27 +1,51 @@
-import json
 import openai
 import tkinter as tk
-import pandas as pd
 from tkinter import scrolledtext
-import tkinter.filedialog as filedialog
 import os
 from dotenv import load_dotenv
-import chromadb
 import re
+from typing import List
+import tiktoken
+from langchain import LLMChain
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts.chat import (
+    ChatPromptTemplate,
+    HumanMessagePromptTemplate,
+)
+from langchain.schema import SystemMessage
 
 load_dotenv()
-openai.api_key = os.environ.get("api_key")
+os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
 
-client = chromadb.PersistentClient()
+llm = ChatOpenAI(temperature=0.8)
 
-collection = client.get_or_create_collection(
-    name="kakao-channel",
-    metadata={"hnsw:space": "cosine"}# l2 is the default #cosine 유사도 사용
-)
+enc = tiktoken.encoding_for_model("gpt-3.5-turbo")
+
+def build_summarizer(llm):
+    system_message = "assistant는 user의 질문을 함께 받는 데이터를 토대로 잘 대답해라."
+    system_message_prompt = SystemMessage(content=system_message)
+    
+    human_template = "{text}\n---\n위 데이터를 토대로 다음 질문에 대답해 줘.\n---\n{question}"
+    human_message_prompt = HumanMessagePromptTemplate.from_template(
+        human_template)
+
+    chat_prompt = ChatPromptTemplate.from_messages([system_message_prompt,
+                                                    human_message_prompt])
+
+    chain = LLMChain(llm=llm, prompt=chat_prompt)
+    return chain
+
+def truncate_text(text, max_tokens=5000):
+    tokens = enc.encode(text)
+    if len(tokens) <= max_tokens:  # 토큰 수가 이미 3000 이하라면 전체 텍스트 반환
+        return text
+    return enc.decode(tokens[:max_tokens])
+
+summarizer = build_summarizer(llm)
 
 # 데이터 정제 및 저장
-def save_data():
-    data_file = open('data.txt', 'r', encoding='utf-8')
+def get_data():
+    data_file = open('sync.txt', 'r', encoding='utf-8')
     line = data_file.readline()
     data = {}
     current_section = ""
@@ -35,115 +59,42 @@ def save_data():
         line = data_file.readline()
     # 벡터로 변환 저장할 텍스트 데이터로 ChromaDB에 Embedding 데이터가 없으면 자동으로 벡터로 변환해서 저장
     documents = []
-    doc_meta = []
 
     for key, value in data.items():
         document = f"{key}:{value}"
         documents.append(document)
-        meta = {
-            "desc": value
-        }
-        doc_meta.append(meta)
 
-    # DB 저장
-    collection.add(
-        documents=documents,
-        metadatas=doc_meta,
-        ids=list(data.keys())
-    )
+    return ' '.join(documents)
 
+data = get_data()
 
-# response에 CSV 형식이 있는지 확인하고 있으면 저장하기
-# def save_to_csv(df):
-#     file_path = filedialog.asksaveasfilename(defaultextension='.csv')
-#     if file_path:
-#         df.to_csv(file_path, sep=';', index=False, lineterminator='\n')
-#         return f'파일을 저장했습니다. 저장 경로는 다음과 같습니다. \n {file_path}\n'
-#     return '저장을 취소했습니다'
+def task(data, question):
 
+    full_content_truncated = truncate_text(data, max_tokens=3500)
 
-# def save_playlist_as_csv(playlist_csv):
-#     if ";" in playlist_csv:
-#         lines = playlist_csv.strip().split("\n")
-#         csv_data = []
+    summary = summarizer.run(text=full_content_truncated, question=question)
 
-#         for line in lines:
-#             if ";" in line:
-#                 csv_data.append(line.split(";"))
-
-#         if len(csv_data) > 0:
-#             df = pd.DataFrame(csv_data[1:], columns=csv_data[0])
-#             return save_to_csv(df)
-
-#     return f'저장에 실패했습니다. \n저장에 실패한 내용은 다음과 같습니다. \n{playlist_csv}'
-
+    return summary
 
 def send_message(message_log, gpt_model="gpt-3.5-turbo", temperature=0.1):
     response = openai.ChatCompletion.create(
         model=gpt_model,
         messages=message_log,
         temperature=temperature,
-        # functions=functions,
-        # function_call='auto',
     )
-
-    # response_message = response["choices"][0]["message"]
-
-    # if response_message.get("function_call"):
-    #     available_functions = {
-    #         "find_db": find_db,
-    #     }
-    #     function_name = response_message["function_call"]["name"]
-    #     fuction_to_call = available_functions[function_name]
-    #     function_args = json.loads(response_message["function_call"]["arguments"])
-    #     # 사용하는 함수에 따라 사용하는 인자의 개수와 내용이 달라질 수 있으므로
-    #     # **function_args로 처리하기
-    #     function_response = fuction_to_call(**function_args)
-
-    #     # 함수를 실행한 결과를 GPT에게 보내 답을 받아오기 위한 부분
-    #     message_log.append(response_message)  # GPT의 지난 답변을 message_logs에 추가하기
-    #     message_log.append(
-    #         {
-    #             "role": "function",
-    #             "name": function_name,
-    #             "content": function_response,
-    #         }
-    #     )  # 함수 실행 결과도 GPT messages에 추가하기
-    #     response = openai.ChatCompletion.create(
-    #         model=gpt_model,
-    #         messages=message_log,
-    #         temperature=temperature,
-    #     )  # 함수 실행 결과를 GPT에 보내 새로운 답변 받아오기
     return response.choices[0].message.content
 
 
 def main():
-    save_data()
+    
     message_log = [
         {
             "role": "system",
             "content": '''
-            너는 카카오톡이라는 메신저의 채널에 대해서 설명해주는 챗봇이다.
+            너는 카카오톡이라는 메신저의 싱크 API에 대해서 설명해주는 챗봇이다.
             '''
         }
     ]
-
-    # functions = [
-    #     {
-    #         "name": "save_playlist_as_csv",
-    #         "description": "Saves the given playlist data into a CSV file when the user confirms the playlist.",
-    #         "parameters": {
-    #             "type": "object",
-    #             "properties": {
-    #                 "playlist_csv": {
-    #                     "type": "string",
-    #                     "description": "A playlist in CSV format separated by ';'. It must contains a header and the release year should follow the 'YYYY' format. The CSV content must starts with a new line. The header of the CSV file must be in English and it should be formatted as follows: 'Title;Artist;Released'.",
-    #                 },
-    #             },
-    #             "required": ["playlist_csv"],
-    #         },
-    #     }
-    # ]
 
     def show_popup_message(window, message):
         popup = tk.Toplevel(window)
@@ -189,23 +140,7 @@ def main():
         window.update_idletasks()
         # '생각 중...' 팝업 창이 반드시 화면에 나타나도록 강제로 설정하기
 
-        vector_res = collection.query(
-            query_texts=[user_input],
-            n_results=1,
-        )
-
-        srchres = []
-        for v in vector_res['documents'][0]:
-            item = v.split(':')
-            srchres.append({
-                "title" : item[0].strip(),
-                "desc" : item[1].strip(),
-            })
-
-        message_log.append({"role": "assistant", "content": f"{srchres}"})
-        message_log.append({"role": "user", "content": user_input})
-        
-        response = send_message(message_log)
+        response = task(data, user_input)
         thinking_popup.destroy()
 
         message_log.append({"role": "assistant", "content": response})
