@@ -1,17 +1,19 @@
 from dto import ChatbotRequest
 from samples import list_card
-import aiohttp
 import time
 import logging
+import openai
 from dotenv import load_dotenv
 import os
 import mission
+import requests
 
 # 환경 변수 처리 필요!
 load_dotenv()
+openai.api_key = os.environ.get("api_key")
 logger = logging.getLogger("Callback")
 
-async def callback_handler(request: ChatbotRequest) -> dict:
+def callback_handler(request: ChatbotRequest) -> dict:
     # ===================== start =================================
     output_text = mission.task(request.userRequest.utterance)
 
@@ -38,6 +40,5 @@ async def callback_handler(request: ChatbotRequest) -> dict:
     print(payload)
     print(len(str(payload)))
     if url:
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url=url, json=payload, ssl=False) as resp:
-                await resp.json()
+        with requests.post(url=url, json=payload, verify=False) as resp:
+            resp.json()
