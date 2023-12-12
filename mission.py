@@ -35,7 +35,7 @@ def build_summarizer(llm):
     chain = LLMChain(llm=llm, prompt=chat_prompt)
     return chain
 
-def truncate_text(text, max_tokens=5000):
+def truncate_text(text, max_tokens=3000):
     tokens = enc.encode(text)
     if len(tokens) <= max_tokens:  # 토큰 수가 이미 3000 이하라면 전체 텍스트 반환
         return text
@@ -43,7 +43,6 @@ def truncate_text(text, max_tokens=5000):
 
 summarizer = build_summarizer(llm)
 
-# 데이터 정제 및 저장
 def get_data():
     data_file = open('sync.txt', 'r', encoding='utf-8')
     line = data_file.readline()
@@ -57,7 +56,6 @@ def get_data():
         elif current_section != "":
             data[current_section] += parsed_line
         line = data_file.readline()
-    # 벡터로 변환 저장할 텍스트 데이터로 ChromaDB에 Embedding 데이터가 없으면 자동으로 벡터로 변환해서 저장
     documents = []
 
     for key, value in data.items():
