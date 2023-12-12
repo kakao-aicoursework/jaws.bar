@@ -3,14 +3,12 @@ from samples import list_card
 import aiohttp
 import time
 import logging
-import openai
 from dotenv import load_dotenv
 import os
 import mission
 
 # 환경 변수 처리 필요!
 load_dotenv()
-openai.api_key = os.environ.get("api_key")
 logger = logging.getLogger("Callback")
 
 async def callback_handler(request: ChatbotRequest) -> dict:
