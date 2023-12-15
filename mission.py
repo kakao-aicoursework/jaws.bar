@@ -1,12 +1,12 @@
 import os
 from dotenv import load_dotenv
-import re
 from typing import List
 from langchain.chains import LLMChain
 from langchain.prompts.chat import (
     ChatPromptTemplate,
 )
 from langchain.chat_models import ChatOpenAI
+from upload import collection, channel_db, channel_retriever, sync_db, sync_retriever, social_db, social_retriever
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
@@ -27,14 +27,32 @@ def create_chain(llm, template_path, output_key):
         verbose=True,
     )
 
-# def query_db(query: str, use_retriever: bool = False) -> list[str]:
-#     if use_retriever:
-#         docs = _retriever.get_relevant_documents(query)
-#     else:
-#         docs = _db.similarity_search(query)
+def query_channel_db(query: str, use_retriever: bool = False) -> list[str]:
+    if use_retriever:
+        docs = channel_retriever.get_relevant_documents(query)
+    else:
+        docs = channel_retriever.similarity_search(query)
 
-#     # str_docs = [doc.page_content for doc in docs]
-#     return docs
+    str_docs = [doc.page_content for doc in docs]
+    return str_docs
+
+def query_sync_db(query: str, use_retriever: bool = False) -> list[str]:
+    if use_retriever:
+        docs = sync_retriever.get_relevant_documents(query)
+    else:
+        docs = sync_retriever.similarity_search(query)
+
+    str_docs = [doc.page_content for doc in docs]
+    return str_docs
+
+def query_social_db(query: str, use_retriever: bool = False) -> list[str]:
+    if use_retriever:
+        docs = social_retriever.get_relevant_documents(query)
+    else:
+        docs = social_retriever.similarity_search(query)
+
+    str_docs = [doc.page_content for doc in docs]
+    return str_docs
 
 def query_collection(query: str) -> List[dict]:
     vector_res = collection.query(

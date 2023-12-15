@@ -10,9 +10,32 @@ import chromadb
 import re
 
 CHROMA_COLLECTION_NAME = "kakao"
+CHROMA_PERSIST_DIR = "chromadb"
+
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
+
+channel_db = Chroma(
+    persist_directory=CHROMA_PERSIST_DIR,
+    embedding_function=OpenAIEmbeddings(),
+    collection_name="channel",
+)
+channel_retriever = channel_db.as_retriever()
+
+sync_db = Chroma(
+    persist_directory=CHROMA_PERSIST_DIR,
+    embedding_function=OpenAIEmbeddings(),
+    collection_name="sync",
+)
+sync_retriever = sync_db.as_retriever()
+
+social_db = Chroma(
+    persist_directory=CHROMA_PERSIST_DIR,
+    embedding_function=OpenAIEmbeddings(),
+    collection_name="social",
+)
+social_retriever = social_db.as_retriever()
 
 client = chromadb.PersistentClient()
 
@@ -21,18 +44,20 @@ collection = client.get_or_create_collection(
     metadata={"hnsw:space": "cosine"}# l2 is the default #cosine 유사도 사용
 )
 
-def upload_embedding_from_file(file_path):
+def upload_embedding_from_file(file_path, collection_name):
+    if TextLoader is None:
+        raise ValueError("Not supported file type")
     documents = TextLoader(file_path).load()
-    print(documents, end='\n\n\n')
 
-    text_splitter = CharacterTextSplitter(chunk_size=500, chunk_overlap=100)
+    text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=20)
     docs = text_splitter.split_documents(documents)
     print(docs, end='\n\n\n')
 
     Chroma.from_documents(
         docs,
         OpenAIEmbeddings(),
-        collection_name=CHROMA_COLLECTION_NAME,
+        collection_name=collection_name,
+        persist_directory=CHROMA_PERSIST_DIR,
     )
     print('db success')
 
@@ -70,10 +95,12 @@ def save_data(file_name: str):
 
 
 def main():
-    # upload_embedding_from_file('data/channel.txt')
-    save_data('data/channel.txt')
-    save_data('data/sync.txt')
-    save_data('data/social.txt')
+    upload_embedding_from_file('data/channel.txt', "channel")
+    upload_embedding_from_file('data/sync.txt', "sync")
+    upload_embedding_from_file('data/social.txt', "social")
+    # save_data('data/channel.txt')
+    # save_data('data/sync.txt')
+    # save_data('data/social.txt')
 
 
 if __name__ == "__main__":
