@@ -15,7 +15,7 @@ logger = logging.getLogger("Callback")
 
 def callback_handler(request: ChatbotRequest) -> dict:
     # ===================== start =================================
-    output_text = mission.task(request.userRequest.utterance)
+    output_text = mission.gernerate_answer(request.userRequest.utterance)
 
    # 참고링크 통해 payload 구조 확인 가능
     payload = {
@@ -37,8 +37,6 @@ def callback_handler(request: ChatbotRequest) -> dict:
     time.sleep(1.0)
 
     url = request.userRequest.callbackUrl
-    print(payload)
-    print(len(str(payload)))
     if url:
         with requests.post(url=url, json=payload, verify=False) as resp:
             resp.json()
