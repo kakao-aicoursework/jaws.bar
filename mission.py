@@ -31,7 +31,7 @@ def query_channel_db(query: str, use_retriever: bool = False) -> list[str]:
     if use_retriever:
         docs = channel_retriever.get_relevant_documents(query)
     else:
-        docs = channel_retriever.similarity_search(query)
+        docs = channel_db.similarity_search(query)
 
     str_docs = [doc.page_content for doc in docs]
     return str_docs
@@ -40,7 +40,7 @@ def query_sync_db(query: str, use_retriever: bool = False) -> list[str]:
     if use_retriever:
         docs = sync_retriever.get_relevant_documents(query)
     else:
-        docs = sync_retriever.similarity_search(query)
+        docs = sync_db.similarity_search(query)
 
     str_docs = [doc.page_content for doc in docs]
     return str_docs
@@ -49,7 +49,7 @@ def query_social_db(query: str, use_retriever: bool = False) -> list[str]:
     if use_retriever:
         docs = social_retriever.get_relevant_documents(query)
     else:
-        docs = social_retriever.similarity_search(query)
+        docs = social_db.similarity_search(query)
 
     str_docs = [doc.page_content for doc in docs]
     return str_docs
@@ -73,18 +73,17 @@ def query_collection(query: str) -> List[dict]:
 
 llm = ChatOpenAI(temperature=0.1, max_tokens=1000, model="gpt-3.5-turbo")
 
-first_chain = create_chain(
-    llm=llm,
-    template_path="prompts/first.txt",
-    output_key="output"
+check_channel_chain = create_chain(
+    llm=llm, template_path="prompts/check_channel.txt", output_key="output"
 )
-second_chain = create_chain(
-    llm=llm,
-    template_path="prompts/second.txt",
-    output_key="output"
+extract_channel_question_chain = create_chain(
+    llm=llm, template_path="prompts/extract_channel_question.txt", output_key="output"
 )
 default_chain = create_chain(
     llm=llm, template_path="prompts/default_response.txt", output_key="output"
+)
+final_response_chain = create_chain(
+    llm=llm, template_path="prompts/final_response.txt", output_key="output"
 )
 
 from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
@@ -121,12 +120,17 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
     context["input"] = context["user_message"]
     context["chat_history"] = get_chat_history(conversation_id)
 
-    context["related_documents"] = query_collection(context["user_message"])
-    print(context["related_documents"])
-    has_value = first_chain.run(context)
+    # context["related_documents"] = query_collection(context["user_message"])
+    # print(context["related_documents"])
+    is_related_channel = check_channel_chain.run(context)
     answer = ""
-    if has_value == "Y":
-        answer = second_chain.run(context)
+    if is_related_channel == "Y":
+        channel_question = extract_channel_question_chain.run(context)
+        print(channel_question)
+        context["channel_related_documents"] = query_channel_db(channel_question)
+        print(context["channel_related_documents"])
+        answer = final_response_chain.run(context)
+        print(answer)
     else:
         answer = default_chain.run(context)
 
