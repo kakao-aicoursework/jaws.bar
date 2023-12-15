@@ -5,6 +5,14 @@ Your job is to read the <message>, Answer the question with <context> very detai
 {channel_related_documents}
 </channel_context>
 
+<sync_context>
+{sync_related_documents}
+</sync_context>
+
+<social_context>
+{social_related_documents}
+</social_context>
+
 {chat_history}
 User: {user_message}
 Answer:

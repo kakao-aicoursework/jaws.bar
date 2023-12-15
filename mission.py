@@ -79,6 +79,18 @@ check_channel_chain = create_chain(
 extract_channel_question_chain = create_chain(
     llm=llm, template_path="prompts/extract_channel_question.txt", output_key="output"
 )
+check_sync_chain = create_chain(
+    llm=llm, template_path="prompts/check_sync.txt", output_key="output"
+)
+extract_sync_question_chain = create_chain(
+    llm=llm, template_path="prompts/extract_sync_question.txt", output_key="output"
+)
+check_social_chain = create_chain(
+    llm=llm, template_path="prompts/check_social.txt", output_key="output"
+)
+extract_social_question_chain = create_chain(
+    llm=llm, template_path="prompts/extract_social_question.txt", output_key="output"
+)
 default_chain = create_chain(
     llm=llm, template_path="prompts/default_response.txt", output_key="output"
 )
@@ -120,19 +132,35 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
     context["input"] = context["user_message"]
     context["chat_history"] = get_chat_history(conversation_id)
 
+    context["channel_related_documents"] = []
+    context["sync_related_documents"] = []
+    context["social_related_documents"] = []
+
     # context["related_documents"] = query_collection(context["user_message"])
     # print(context["related_documents"])
     is_related_channel = check_channel_chain.run(context)
-    answer = ""
     if is_related_channel == "Y":
         channel_question = extract_channel_question_chain.run(context)
         print(channel_question)
         context["channel_related_documents"] = query_channel_db(channel_question)
         print(context["channel_related_documents"])
-        answer = final_response_chain.run(context)
-        print(answer)
-    else:
-        answer = default_chain.run(context)
+
+    is_related_sync = check_sync_chain.run(context)
+    if is_related_sync == "Y":
+        sync_question = extract_sync_question_chain.run(context)
+        print(sync_question)
+        context["sync_related_documents"] = query_sync_db(sync_question)
+        print(context["sync_related_documents"])
+
+    is_related_social = check_social_chain.run(context)
+    if is_related_social == "Y":
+        social_question = extract_social_question_chain.run(context)
+        print(social_question)
+        context["social_related_documents"] = query_social_db(social_question)
+        print(context["social_related_documents"])
+
+    answer = final_response_chain.run(context)
+    print(answer)
 
     log_user_message(history_file, user_message)
     log_bot_message(history_file, answer)
