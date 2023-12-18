@@ -1,2 +1,2 @@
-question: Choose this intent for a phrase that asks something.
+question: Choose this intention for a phrase that asks for information other than simple interactions such as "Did you eat?"
 social_interaction: Select this intent for casual social exchanges, including both greetings and farewells. Examples include phrases like "Hi?", "Goodbye", "Hello!", "See you", and other similar social phrases.
