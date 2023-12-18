@@ -3,3 +3,4 @@ sample.py
 chroma
 history
 chromadb
+__pycache__

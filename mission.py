@@ -7,6 +7,8 @@ from langchain.prompts.chat import (
 )
 from langchain.chat_models import ChatOpenAI
 from upload import collection, channel_db, channel_retriever, sync_db, sync_retriever, social_db, social_retriever
+from langchain.agents.tools import Tool
+from langchain.agents import initialize_agent
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
@@ -16,6 +18,7 @@ def read_prompt_template(file_path: str) -> str:
         prompt_template = f.read()
 
     return prompt_template
+
 
 def create_chain(llm, template_path, output_key):
     return LLMChain(
@@ -73,29 +76,28 @@ def query_collection(query: str) -> List[dict]:
 
 llm = ChatOpenAI(temperature=0.1, max_tokens=1000, model="gpt-3.5-turbo")
 
-check_channel_chain = create_chain(
-    llm=llm, template_path="prompts/check_channel.txt", output_key="output"
-)
-extract_channel_question_chain = create_chain(
-    llm=llm, template_path="prompts/extract_channel_question.txt", output_key="output"
-)
-check_sync_chain = create_chain(
-    llm=llm, template_path="prompts/check_sync.txt", output_key="output"
-)
-extract_sync_question_chain = create_chain(
-    llm=llm, template_path="prompts/extract_sync_question.txt", output_key="output"
-)
-check_social_chain = create_chain(
-    llm=llm, template_path="prompts/check_social.txt", output_key="output"
-)
-extract_social_question_chain = create_chain(
-    llm=llm, template_path="prompts/extract_social_question.txt", output_key="output"
-)
-default_chain = create_chain(
-    llm=llm, template_path="prompts/default_response.txt", output_key="output"
-)
-final_response_chain = create_chain(
-    llm=llm, template_path="prompts/final_response.txt", output_key="output"
+tools =[
+        Tool(
+            name="channel",
+            func=query_channel_db,
+            description="카카오톡 채널에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+        ),
+        Tool(
+            name="sync",
+            func=query_sync_db,
+            description="카카오톡 싱크에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+        ),
+        Tool(
+            name="social",
+            func=query_social_db,
+            description="카카오톡 소셜에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+        )
+        ]
+
+agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True)
+
+answer_chain = create_chain(
+    llm=llm, template_path="prompts/answer_with_function_result.txt", output_key="output"
 )
 
 from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
@@ -132,35 +134,8 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
     context["input"] = context["user_message"]
     context["chat_history"] = get_chat_history(conversation_id)
 
-    context["channel_related_documents"] = []
-    context["sync_related_documents"] = []
-    context["social_related_documents"] = []
-
-    # context["related_documents"] = query_collection(context["user_message"])
-    # print(context["related_documents"])
-    is_related_channel = check_channel_chain.run(context)
-    if is_related_channel == "Y":
-        channel_question = extract_channel_question_chain.run(context)
-        print(channel_question)
-        context["channel_related_documents"] = query_channel_db(channel_question)
-        print(context["channel_related_documents"])
-
-    is_related_sync = check_sync_chain.run(context)
-    if is_related_sync == "Y":
-        sync_question = extract_sync_question_chain.run(context)
-        print(sync_question)
-        context["sync_related_documents"] = query_sync_db(sync_question)
-        print(context["sync_related_documents"])
-
-    is_related_social = check_social_chain.run(context)
-    if is_related_social == "Y":
-        social_question = extract_social_question_chain.run(context)
-        print(social_question)
-        context["social_related_documents"] = query_social_db(social_question)
-        print(context["social_related_documents"])
-
-    answer = final_response_chain.run(context)
-    print(answer)
+    context["function_result"] = agent.run(user_message)
+    answer = answer_chain.run(context)
 
     log_user_message(history_file, user_message)
     log_bot_message(history_file, answer)
