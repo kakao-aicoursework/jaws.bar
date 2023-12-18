@@ -57,23 +57,6 @@ def query_social_db(query: str, use_retriever: bool = False) -> list[str]:
     str_docs = [doc.page_content for doc in docs]
     return str_docs
 
-def query_collection(query: str) -> List[dict]:
-    vector_res = collection.query(
-            query_texts=[query],
-            n_results=3,
-        )
-
-    srchres = []
-    print(vector_res)
-    for v in vector_res['documents'][0]:
-        item = v.split(':')
-        srchres.append({
-            "title" : item[0].strip(),
-            "desc" : item[1].strip(),
-        })
-
-    return srchres
-
 llm = ChatOpenAI(temperature=0.1, max_tokens=1000, model="gpt-3.5-turbo")
 
 tools =[
@@ -95,6 +78,14 @@ tools =[
         ]
 
 agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True)
+
+parse_intent_chain = create_chain(
+    llm=llm, template_path="prompts/parse_intent.txt", output_key="output"
+)
+
+default_response_chain = create_chain(
+    llm=llm, template_path="prompts/default_response.txt", output_key="output"
+)
 
 answer_chain = create_chain(
     llm=llm, template_path="prompts/answer_with_function_result.txt", output_key="output"
@@ -133,9 +124,16 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
     context = dict(user_message=user_message)
     context["input"] = context["user_message"]
     context["chat_history"] = get_chat_history(conversation_id)
+    context["intent_list"] = read_prompt_template("prompts/intent_list.txt")
 
-    context["function_result"] = agent.run(user_message)
-    answer = answer_chain.run(context)
+    intent = parse_intent_chain.run(context)
+    answer = ""
+
+    if intent == "question":
+        context["function_result"] = agent.run(user_message)
+        answer = answer_chain.run(context)
+    else:
+        answer = default_response_chain.run(context)
 
     log_user_message(history_file, user_message)
     log_bot_message(history_file, answer)
