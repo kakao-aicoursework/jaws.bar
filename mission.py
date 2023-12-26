@@ -10,6 +10,8 @@ from upload import collection, channel_db, channel_retriever, sync_db, sync_retr
 from langchain.agents.tools import Tool
 from langchain.agents import initialize_agent
 
+CUSTOM_PREFIX= """Answer the following questions in as much detail as possible.You have access to the following tools:"""
+
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
 
@@ -63,21 +65,21 @@ tools =[
         Tool(
             name="channel",
             func=query_channel_db,
-            description="카카오톡 채널에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+            description="This is useful when you need information about your KakaoTalk channel. You should ask targeted questions.",
         ),
         Tool(
             name="sync",
             func=query_sync_db,
-            description="카카오톡 싱크에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+            description="This is useful when you need information about your KakaoTalk sync. You should ask targeted questions.",
         ),
         Tool(
             name="social",
             func=query_social_db,
-            description="카카오톡 소셜에 대한 답을 할 때 유용합니다. 타겟팅된 질문을 해야 합니다.",
+            description="This is useful when you need information about your KakaoTalk social. You should ask targeted questions.",
         )
         ]
 
-agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True)
+agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True, agent_kwargs={'prefix': CUSTOM_PREFIX})
 
 parse_intent_chain = create_chain(
     llm=llm, template_path="prompts/parse_intent.txt", output_key="output"
@@ -123,7 +125,8 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
 
     context = dict(user_message=user_message)
     context["input"] = context["user_message"]
-    context["chat_history"] = get_chat_history(conversation_id)
+    # context["chat_history"] = get_chat_history(conversation_id)
+    context["chat_history"] = ""
     context["intent_list"] = read_prompt_template("prompts/intent_list.txt")
 
     intent = parse_intent_chain.run(context)
