@@ -93,6 +93,14 @@ answer_chain = create_chain(
     llm=llm, template_path="prompts/answer_with_function_result.txt", output_key="output"
 )
 
+translate_to_english_chain = create_chain(
+    llm=llm, template_path="prompts/translate_to_english.txt", output_key="output"
+)
+
+translate_to_korean_chain = create_chain(
+    llm=llm, template_path="prompts/translate_to_korean.txt", output_key="output"
+)
+
 from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
 
 HISTORY_DIR = "history/"
@@ -124,19 +132,20 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
     history_file = load_conversation_history(conversation_id)
 
     context = dict(user_message=user_message)
-    context["input"] = context["user_message"]
+    context["user_message"] = translate_to_english_chain.run(context)
     # context["chat_history"] = get_chat_history(conversation_id)
     context["chat_history"] = ""
     context["intent_list"] = read_prompt_template("prompts/intent_list.txt")
 
     intent = parse_intent_chain.run(context)
-    answer = ""
 
     if intent == "question":
         context["function_result"] = agent.run(user_message)
-        answer = answer_chain.run(context)
+        context["answer"] = answer_chain.run(context)
     else:
-        answer = default_response_chain.run(context)
+        context["answer"] = default_response_chain.run(context)
+
+    answer = translate_to_korean_chain.run(context)
 
     log_user_message(history_file, user_message)
     log_bot_message(history_file, answer)

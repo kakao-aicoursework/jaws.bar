@@ -1,0 +1,5 @@
+If the question is not English, translate it into English.
+If it's English, tell me the question as it is.
+
+User: {user_message}
+Assistant:
