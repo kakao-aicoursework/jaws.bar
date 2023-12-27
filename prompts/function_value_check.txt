@@ -1,0 +1,12 @@
+Your job is to read the <message>, If <function_result> can help you to answer the <message>, answer Y.
+
+<message>
+{user_message}
+</message>
+
+<function_result>
+{function_result}
+</function_result>
+
+You must answer Y or N.
+Answer:

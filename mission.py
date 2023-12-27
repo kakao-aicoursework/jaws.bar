@@ -9,8 +9,10 @@ from langchain.chat_models import ChatOpenAI
 from upload import collection, channel_db, channel_retriever, sync_db, sync_retriever, social_db, social_retriever
 from langchain.agents.tools import Tool
 from langchain.agents import initialize_agent
+from langchain.utilities import GoogleSearchAPIWrapper
 
 CUSTOM_PREFIX= """Answer the following questions in as much detail as possible.You have access to the following tools:"""
+DONT_KNOW = "Sorry, I can't answer your question, please look forward to the next version."
 
 load_dotenv()
 os.environ["OPENAI_API_KEY"] = os.environ.get("api_key")
@@ -61,26 +63,6 @@ def query_social_db(query: str, use_retriever: bool = False) -> list[str]:
 
 llm = ChatOpenAI(temperature=0.1, max_tokens=1000, model="gpt-3.5-turbo")
 
-tools =[
-        Tool(
-            name="channel",
-            func=query_channel_db,
-            description="This is useful when you need information about your KakaoTalk channel. You should ask targeted questions.",
-        ),
-        Tool(
-            name="sync",
-            func=query_sync_db,
-            description="This is useful when you need information about your KakaoTalk sync. You should ask targeted questions.",
-        ),
-        Tool(
-            name="social",
-            func=query_social_db,
-            description="This is useful when you need information about your KakaoTalk social. You should ask targeted questions.",
-        )
-        ]
-
-agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True, agent_kwargs={'prefix': CUSTOM_PREFIX})
-
 parse_intent_chain = create_chain(
     llm=llm, template_path="prompts/parse_intent.txt", output_key="output"
 )
@@ -93,12 +75,28 @@ answer_chain = create_chain(
     llm=llm, template_path="prompts/answer_with_function_result.txt", output_key="output"
 )
 
+answer_with_all_chain = create_chain(
+    llm=llm, template_path="prompts/answer_with_all.txt", output_key="output"
+)
+
 translate_to_english_chain = create_chain(
     llm=llm, template_path="prompts/translate_to_english.txt", output_key="output"
 )
 
 translate_to_korean_chain = create_chain(
     llm=llm, template_path="prompts/translate_to_korean.txt", output_key="output"
+)
+
+function_value_check_chain = create_chain(
+    llm=llm, template_path="prompts/function_value_check.txt", output_key="output"
+)
+
+search_value_check_chain = create_chain(
+    llm=llm, template_path="prompts/search_value_check.txt", output_key="output"
+)
+
+search_compression_chain = create_chain(
+    llm=llm, template_path="prompts/search_compression.txt", output_key="output"
 )
 
 from langchain.memory import ConversationBufferMemory, FileChatMessageHistory
@@ -128,6 +126,49 @@ def get_chat_history(conversation_id: str):
 
     return memory.buffer
 
+search = GoogleSearchAPIWrapper(
+    google_api_key=os.getenv("GOOGLE_API_KEY"),
+    google_cse_id=os.getenv("GOOGLE_CSE_ID")
+)
+
+search_tool = Tool(
+    name="Google Search",
+    description="Search Google for recent results.",
+    func=search.run,
+)
+
+def query_web_search(user_message: str) -> str:
+    context = {"user_message": user_message}
+    context["related_web_search_results"] = search_tool.run(user_message)
+
+    has_value = search_value_check_chain.run(context)
+
+    print(has_value)
+    if has_value == "Y":
+        return search_compression_chain.run(context)
+    else:
+        return ""
+    
+tools =[
+        Tool(
+            name="channel",
+            func=query_channel_db,
+            description="This is useful when you need information about your KakaoTalk channel. You should ask targeted questions.",
+        ),
+        Tool(
+            name="sync",
+            func=query_sync_db,
+            description="This is useful when you need information about your KakaoTalk sync. You should ask targeted questions.",
+        ),
+        Tool(
+            name="social",
+            func=query_social_db,
+            description="This is useful when you need information about your KakaoTalk social. You should ask targeted questions.",
+        ),
+        ]
+
+agent = initialize_agent(tools, llm, agent="zero-shot-react-description", verbose=True, agent_kwargs={'prefix': CUSTOM_PREFIX})
+
 def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, str]:
     history_file = load_conversation_history(conversation_id)
 
@@ -139,12 +180,17 @@ def gernerate_answer(user_message, conversation_id: str='fa1010') -> dict[str, s
 
     intent = parse_intent_chain.run(context)
 
-    if intent == "question":
-        context["function_result"] = agent.run(user_message)
-        context["answer"] = answer_chain.run(context)
-    else:
+    if intent == "social_interaction":
         context["answer"] = default_response_chain.run(context)
-
+    else:
+        context["function_results"] = ""
+        if intent == "specific_question":
+            context["function_results"] = agent.run(user_message)
+        context["compressed_web_search_results"] = query_web_search(
+            context["user_message"]
+        )
+        context["answer"] = answer_chain.run(context)
+        
     answer = translate_to_korean_chain.run(context)
 
     log_user_message(history_file, user_message)

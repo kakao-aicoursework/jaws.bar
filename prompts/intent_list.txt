@@ -1,2 +1,3 @@
-question: Choose this intention for a phrase that asks for information other than simple interactions such as "Did you eat?"
+specific_question: Choose this intension if any of the questions are related to KakaoTalk channel, sync, or social.
+general_question: Choose this intention for a phrase that is not "specific_question" and asks for information that asks for information other than simple interactions such as "Did you eat?". 
 social_interaction: Select this intent for casual social exchanges, including both greetings and farewells. Examples include phrases like "Hi?", "Goodbye", "Hello!", "See you", and other similar social phrases.
